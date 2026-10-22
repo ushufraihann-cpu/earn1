@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Vexo Earn</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script src='//libtl.com/sdk.js' data-zone='12091738' data-sdk='show_12091738'></script>
+<style>
+:root{
+  --bg:#171a2e; --panel:#22264a; --line:#343a6b; --text:#f3f4fb; --mute:#a3a8cf;
+  --gold:#f5b835; --gold-ink:#2b2005; --ok:#4fd1a5; --bad:#ff7a7a;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,"Segoe UI","Noto Sans Bengali",sans-serif;
+  padding:18px 16px calc(24px + env(safe-area-inset-bottom,0px));max-width:480px;margin:0 auto}
+h1{font-size:1.15rem;font-weight:700;letter-spacing:.2px}
+.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px}
+.user{font-size:.85rem;color:var(--mute)}
+.balance{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:22px 20px;margin-bottom:14px}
+.balance small{color:var(--mute);font-size:.82rem}
+.balance .amt{font-size:2.6rem;font-weight:800;color:var(--gold);line-height:1.1;margin-top:4px;font-variant-numeric:tabular-nums}
+.stats{display:flex;gap:10px;margin-bottom:14px}
+.stat{flex:1;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px}
+.stat b{display:block;font-size:1.2rem;font-variant-numeric:tabular-nums}
+.stat span{font-size:.78rem;color:var(--mute)}
+.task{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:18px}
+.task h2{font-size:1rem;margin-bottom:4px}
+.task p{font-size:.85rem;color:var(--mute);margin-bottom:14px;line-height:1.5}
+.bar{height:6px;background:var(--line);border-radius:3px;overflow:hidden;margin-bottom:14px}
+.bar i{display:block;height:100%;width:0;background:var(--ok);transition:width .3s}
+button{font:inherit;cursor:pointer;border:0}
+.go{width:100%;padding:15px;border-radius:12px;background:var(--gold);color:var(--gold-ink);font-weight:700;font-size:1rem}
+.go:disabled{opacity:.55;cursor:default}
+.go:focus-visible{outline:3px solid #fff;outline-offset:2px}
+.toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom,0px));transform:translate(-50%,20px);
+  background:#fff;color:#171a2e;padding:10px 16px;border-radius:10px;font-size:.9rem;font-weight:600;opacity:0;pointer-events:none;transition:.25s}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+.toast.err{background:var(--bad)}
+#join{position:fixed;inset:0;background:rgba(10,12,25,.88);display:none;align-items:center;justify-content:center;padding:20px;z-index:10}
+#join.show{display:flex}
+.modal{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:24px;width:100%;max-width:380px;text-align:center}
+.modal h2{margin-bottom:8px}
+.modal p{color:var(--mute);font-size:.9rem;line-height:1.5;margin-bottom:18px}
+.link{display:block;padding:14px;border-radius:12px;border:1px solid var(--gold);color:var(--gold);text-decoration:none;font-weight:700;margin-bottom:10px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+<div class="top">
+  <h1>Vexo Earn</h1>
+  <div class="user" id="user">User</div>
+</div>
+
+<div class="balance">
+  <small>আপনার ব্যালেন্স</small>
+  <div class="amt" id="bal">$0.00</div>
+</div>
+
+<div class="stats">
+  <div class="stat"><b id="done">0</b><span>আজকের টাস্ক</span></div>
+  <div class="stat"><b id="limit">9999</b><span>দৈনিক লিমিট</span></div>
+</div>
+
+<div class="task">
+  <h2 id="tTitle">টাস্ক</h2>
+  <p id="tDesc"></p>
+  <div class="bar"><i id="prog"></i></div>
+  <button class="go" id="go">টাস্ক শুরু করুন</button>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<div id="join">
+  <div class="modal">
+    <h2>চ্যানেলে জয়েন করুন</h2>
+    <p>অ্যাপ ব্যবহার করতে আগে আমাদের চ্যানেলে জয়েন করতে হবে।</p>
+    <a class="link" id="chLink" href="https://t.me/VexoEarningBD">চ্যানেলে জয়েন করুন</a>
+    <button class="go" id="joined">I Have Joined</button>
+  </div>
+</div>
+
+<script>
+(function(){
+  var CHANNEL = "https://t.me/VexoEarningBD";
+  var DAILY_LIMIT = 9999;
+  var MID_EVERY = 4;          // প্রতি ৪র্থ টাস্কে
+  var MID_MIN = 15;           // ১৫ সেকেন্ডের আগে বের হওয়া যাবে না
+  var LONG_EVERY = 15;        // প্রতি ১৫তম টাস্কে
+  var LONG_MIN = 25;          // ২৫ সেকেন্ডের আগে বের হওয়া যাবে না
+  var tg = window.Telegram && Telegram.WebApp;
+  if (tg) { tg.ready(); tg.expand(); }
+
+  var uid = (tg && tg.initDataUnsafe && tg.initDataUnsafe.user) ? tg.initDataUnsafe.user.id : "guest";
+  var uname = (tg && tg.initDataUnsafe && tg.initDataUnsafe.user) ? (tg.initDataUnsafe.user.first_name || "User") : "Guest";
+  var KEY = "vexo_" + uid;
+  var JOIN_KEY = "vexo_joined_" + uid;
+
+  function today(){ return new Date().toISOString().slice(0,10); }
+  function load(){
+    try { var s = JSON.parse(localStorage.getItem(KEY)); if (s) return s; } catch(e){}
+    return { bal: 0, total: 0, day: today(), dayCount: 0 };
+  }
+  function save(){ try { localStorage.setItem(KEY, JSON.stringify(S)); } catch(e){} }
+  var S = load();
+  if (S.day !== today()) { S.day = today(); S.dayCount = 0; save(); }
+
+  var $ = function(id){ return document.getElementById(id); };
+  var busy = false;
+
+  function toast(msg, err){
+    var t = $("toast"); t.textContent = msg; t.className = "toast show" + (err ? " err" : "");
+    setTimeout(function(){ t.className = "toast"; }, 2200);
+  }
+
+  // কোন ধরনের টাস্ক আসবে (মোট টাস্ক নম্বর অনুযায়ী)
+  function nextTask(){
+    var n = S.total + 1;
+    if (n % LONG_EVERY === 0) return { type:"long", n:n, min:LONG_MIN, reward:0.05,
+      title:"বোনাস টাস্ক", desc:LONG_MIN+" সেকেন্ডের আগে বিজ্ঞাপন থেকে বের হওয়া যাবে না। পুরো দেখলে $0.05 পাবেন।" };
+    if (n % MID_EVERY === 0) return { type:"mid", n:n, min:MID_MIN, reward:0.01,
+      title:"বিজ্ঞাপন টাস্ক", desc:MID_MIN+" সেকেন্ডের আগে বিজ্ঞাপন থেকে বের হওয়া যাবে না। পুরো দেখলে $0.01 পাবেন।" };
+    return { type:"quick", n:n, min:0, reward:0.01,
+      title:"বিজ্ঞাপন টাস্ক", desc:"বিজ্ঞাপন দেখে ফিরে আসুন, সাথে সাথে $0.01 পাবেন।" };
+  }
+
+  function render(){
+    $("user").textContent = uname;
+    $("bal").textContent = "$" + S.bal.toFixed(2);
+    $("done").textContent = S.dayCount;
+    $("limit").textContent = DAILY_LIMIT;
+    var t = nextTask();
+    $("tTitle").textContent = "টাস্ক #" + t.n + " · " + t.title;
+    $("tDesc").textContent = t.desc;
+    $("prog").style.width = Math.min(100, S.dayCount / DAILY_LIMIT * 100) + "%";
+    var btn = $("go");
+    if (S.dayCount >= DAILY_LIMIT) { btn.disabled = true; btn.textContent = "আজকের লিমিট শেষ"; }
+    else if (!busy) { btn.disabled = false; btn.textContent = "টাস্ক শুরু করুন"; }
+  }
+
+  function reward(t){
+    S.bal = Math.round((S.bal + t.reward) * 100) / 100;
+    S.total += 1; S.dayCount += 1; save();
+    toast("+$" + t.reward.toFixed(2) + " যোগ হয়েছে");
+    busy = false; render();
+  }
+
+  function countdown(sec, label, done){
+    var btn = $("go"), left = sec;
+    btn.disabled = true; btn.textContent = label + " " + left + "s";
+    var iv = setInterval(function(){
+      left--;
+      if (left <= 0) { clearInterval(iv); done(); }
+      else btn.textContent = label + " " + left + "s";
+    }, 1000);
+  }
+
+  function adFail(){
+    busy = false; render();
+    toast("বিজ্ঞাপন পাওয়া যায়নি, আবার চেষ্টা করুন", true);
+  }
+
+  function callAd(arg){
+    if (typeof window.show_12091738 !== "function") return Promise.reject(new Error("sdk"));
+    return arg ? window.show_12091738(arg) : window.show_12091738();
+  }
+
+  $("go").addEventListener("click", function(){
+    if (busy || S.dayCount >= DAILY_LIMIT) return;
+    busy = true;
+    var btn = $("go"); btn.disabled = true; btn.textContent = "লোড হচ্ছে...";
+    var t = nextTask();
+
+    var t0 = Date.now();
+    callAd().then(function(){
+      var secs = (Date.now() - t0) / 1000;
+      // নির্দিষ্ট সময়ের আগে বের হলে রিওয়ার্ড নেই
+      if (t.min && secs < t.min) {
+        busy = false; render();
+        toast(t.min + " সেকেন্ডের আগে বের হয়েছেন, আবার চেষ্টা করুন", true);
+        return;
+      }
+      // বের হয়ে ফিরলে ২ সেকেন্ডের মধ্যে রিওয়ার্ড
+      setTimeout(function(){ reward(t); }, 1000);
+    }, adFail);
+  });
+
+  // চ্যানেল জয়েন পপআপ (শুধু প্রথমবার)
+  var joinEl = $("join");
+  if (!localStorage.getItem(JOIN_KEY)) joinEl.className = "show";
+  $("chLink").addEventListener("click", function(e){
+    if (tg && tg.openTelegramLink) { e.preventDefault(); tg.openTelegramLink(CHANNEL); }
+  });
+  $("joined").addEventListener("click", function(){
+    try { localStorage.setItem(JOIN_KEY, "1"); } catch(e){}
+    joinEl.className = "";
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>
